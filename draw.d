@@ -212,7 +212,9 @@ struct HRImage(COLOR, uint HR)
 		foreach (y; 0..lr.h)
 			foreach (x; 0..lr.w)
 			{
-				Accumulator!COLOR sum;
+				static assert(HR*HR <= 256);
+				// TODO: proper alpha support
+				ExpandType!(COLOR, 1) sum;
 				auto start = y*HR*hr.w + x*HR;
 				foreach (j; 0..HR)
 				{
@@ -245,21 +247,26 @@ struct HRImage(COLOR, uint HR)
 	}
 }
 
-template Accumulator(T)
+template ExpandType(T, uint BYTES)
 {
-	static if (is(T==ubyte))
-		alias ushort Accumulator;
-	else
-	static if (is(T==ushort))
-		alias uint Accumulator;
-	else
-	static if (is(T==uint))
-		alias ulong Accumulator;
+	static if (is(T : ulong))
+	{
+		static if (T.sizeof + BYTES <= 2)
+			alias ushort ExpandType;
+		else
+		static if (T.sizeof + BYTES <= 4)
+			alias uint ExpandType;
+		else
+		static if (T.sizeof + BYTES <= 8)
+			alias ulong ExpandType;
+		else
+			static assert(0, "No type big enough to fit " ~ T.sizeof.stringof ~ " + " ~ BYTES.stringof ~ " bytes");
+	}
 	else
 	static if (is(T==struct))
-		struct Accumulator
+		struct ExpandType
 		{
-			static string mixAccumulatorFields()
+			static string mixFields()
 			{
 				string s;
 				string[] fields;
@@ -274,7 +281,7 @@ template Accumulator(T)
 				}
 
 				foreach (field; fields)
-					s ~= "Accumulator!(typeof(" ~ T.stringof ~ ".init." ~ field ~ ")) " ~ field ~ ";\n";
+					s ~= "ExpandType!(typeof(" ~ T.stringof ~ ".init." ~ field ~ ")) " ~ field ~ ";\n";
 				s ~= "\n";
 
 				s ~= "void opOpAssign(string OP)(" ~ T.stringof ~ " color) if (OP==`+`)\n";
@@ -294,8 +301,8 @@ template Accumulator(T)
 				return s;
 			}
 
-			//pragma(msg, mixAccumulatorFields());
-			mixin(mixAccumulatorFields());
+			//pragma(msg, mixFields());
+			mixin(mixFields());
 		}
 	else
 		static assert(0);
