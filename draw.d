@@ -212,7 +212,7 @@ struct HRImage(COLOR, uint HR)
 		foreach (y; 0..lr.h)
 			foreach (x; 0..lr.w)
 			{
-				uint sum; // TODO: RGB
+				Accumulator!COLOR sum;
 				auto start = y*HR*hr.w + x*HR;
 				foreach (j; 0..HR)
 				{
@@ -243,6 +243,62 @@ struct HRImage(COLOR, uint HR)
 			foreach (y; min(y1,y2)..max(y1,y2)+1)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1, y2), y*HR, c);
 	}
+}
+
+template Accumulator(T)
+{
+	static if (is(T==ubyte))
+		alias ushort Accumulator;
+	else
+	static if (is(T==ushort))
+		alias uint Accumulator;
+	else
+	static if (is(T==uint))
+		alias ulong Accumulator;
+	else
+	static if (is(T==struct))
+		struct Accumulator
+		{
+			static string mixAccumulatorFields()
+			{
+				string s;
+				string[] fields;
+				foreach (i, f; T.init.tupleof)
+				{
+					string field = T.tupleof[i].stringof;
+					while (field[0] != '.')
+						field = field[1..$];
+					field = field[1..$];
+					if (field != "x") // HACK
+						fields ~= field;
+				}
+
+				foreach (field; fields)
+					s ~= "Accumulator!(typeof(" ~ T.stringof ~ ".init." ~ field ~ ")) " ~ field ~ ";\n";
+				s ~= "\n";
+
+				s ~= "void opOpAssign(string OP)(" ~ T.stringof ~ " color) if (OP==`+`)\n";
+				s ~= "{\n";
+				foreach (field; fields)
+					s ~= "	"~field~" += color."~field~";\n";
+				s ~= "}\n\n";
+
+				s ~= T.stringof ~ " opBinary(string OP)(uint divisor) if (OP==`/`)\n";
+				s ~= "{\n";
+				s ~= "	"~T.stringof~" color;\n";
+				foreach (field; fields)
+					s ~= "	color."~field~" = cast(typeof(color."~field~")) ("~field~" / divisor);\n";
+				s ~= "	return color;\n";
+				s ~= "}\n\n";
+
+				return s;
+			}
+
+			//pragma(msg, mixAccumulatorFields());
+			mixin(mixAccumulatorFields());
+		}
+	else
+		static assert(0);
 }
 
 // *****************************************************************************
