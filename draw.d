@@ -234,7 +234,7 @@ struct HRImage(COLOR, uint HR)
 		hr.fillRect(x, y, x+HR, y+HR, c);
 	}
 
-	void line(int x1, int y1, int x2, int y2, COLOR c)
+	void line(uint x1, uint y1, uint x2, uint y2, COLOR c)
 	{
 		if (abs(x2-x1) > abs(y2-y1))
 			foreach (x; min(x1,x2)..max(x1,x2)+1)
