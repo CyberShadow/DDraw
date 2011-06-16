@@ -176,7 +176,7 @@ struct Image(COLOR)
 		return newImage;
 	}
 
-	Image!COLOR2 convert(COLOR2, string pred=`c`)()
+	Image!COLOR2 convert(string pred=`c`, COLOR2=typeof(((){ COLOR c; size_t i; return mixin(pred); })()))()
 	{
 		auto newImage = Image!COLOR2(w, h);
 		foreach (i, c; pixels)
