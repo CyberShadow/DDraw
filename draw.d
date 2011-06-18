@@ -92,7 +92,7 @@ struct Image(COLOR)
 
 	void savePNM()(string filename) // RGB only
 	{
-		static assert(is(typeof(COLOR.init.r)) && is(typeof(COLOR.init.g)) && is(typeof(COLOR.init.b)) && !is(typeof(COLOR.init.a)) && !is(typeof(COLOR.init.x)), "PNM only supports RGB");
+		static assert(__traits(allMembers, COLOR).stringof == `tuple("r","g","b")`, "PNM only supports RGB");
 		static assert(COLOR.init.r.sizeof == COLOR.init.g.sizeof && COLOR.init.g.sizeof == COLOR.init.b.sizeof, "Inconsistent color channel sizes");
 		alias typeof(COLOR.init.r) CHANNEL_TYPE;
 		enforce(w*h == pixels.length, "Dimension mismatch");
@@ -139,7 +139,7 @@ struct Image(COLOR)
 
 	void loadRGBA()(string filename, uint w, uint h)
 	{
-		static assert(is(typeof(COLOR.init.r)) && is(typeof(COLOR.init.g)) && is(typeof(COLOR.init.b)) && is(typeof(COLOR.init.a)), "COLOR is not RGBA");
+		static assert(__traits(allMembers, COLOR).stringof == `tuple("r","g","b","a")`, "COLOR is not RGBA");
 		pixels = cast(COLOR[])read(filename);
 		enforce(pixels.length == w*h, "Dimension / filesize mismatch");
 		this.w = w;
