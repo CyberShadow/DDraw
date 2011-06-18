@@ -7,6 +7,7 @@ import std.exception;
 import std.conv;
 import std.math;
 import std.traits;
+import crc32;
 static import core.bitop;
 
 struct Image(COLOR)
@@ -90,11 +91,32 @@ struct Image(COLOR)
 		return fields;
 	}
 
+	template SameSize(T, U...)
+	{
+		static if (U.length)
+			enum SameSize = T.sizeof==U[0].sizeof && SameSize!U;
+		else
+			enum SameSize = true;
+	}
+
+	template ChannelType(T)
+	{
+		static if (is(T : ulong))
+			alias T ChannelType;
+		else
+		static if (is(T == struct))
+		{
+			static assert(SameSize!T, "Inconsistent color channel sizes");
+			alias typeof(T.init.tupleof[0]) ChannelType;
+		}
+		else
+			static assert(0, "Can't get channel type of " ~ T.stringof);
+	}
+
 	void savePNM()(string filename) // RGB only
 	{
 		static assert(__traits(allMembers, COLOR).stringof == `tuple("r","g","b")`, "PNM only supports RGB");
-		static assert(COLOR.init.r.sizeof == COLOR.init.g.sizeof && COLOR.init.g.sizeof == COLOR.init.b.sizeof, "Inconsistent color channel sizes");
-		alias typeof(COLOR.init.r) CHANNEL_TYPE;
+		alias ChannelType!COLOR CHANNEL_TYPE;
 		enforce(w*h == pixels.length, "Dimension mismatch");
 		ubyte[] header = cast(ubyte[])format("P6\n%d %d %d\n", w, h, CHANNEL_TYPE.max);
 		ubyte[] data = new ubyte[header.length + pixels.length * COLOR.sizeof];
