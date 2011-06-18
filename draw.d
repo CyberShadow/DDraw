@@ -337,11 +337,14 @@ struct Image(COLOR)
 	}
 }
 
-struct RGB  { ubyte r, g, b; }
-struct RGBX { ubyte r, g, b, x; }
-struct RGBA { ubyte r, g, b, a; }
-struct GA   { ubyte g, a; }
-struct GA16 { ushort g, a; }
+struct RGB    { ubyte  r, g, b; }
+struct RGB16  { ushort r, g, b; }
+struct RGBX   { ubyte  r, g, b, x; }
+struct RGBX16 { ushort r, g, b, x; }
+struct RGBA   { ubyte  r, g, b, a; }
+struct RGBA16 { ushort r, g, b, a; }
+struct GA     { ubyte  g, a; }
+struct GA16   { ushort g, a; }
 
 private
 {
