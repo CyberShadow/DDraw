@@ -280,11 +280,32 @@ struct HRImage(COLOR, uint HR)
 		auto ymax = max(y1, y2);
 
 		if (xmax-xmin > ymax-ymin)
-			foreach (x; min(x1,x2)..max(x1,x2)+1)
+			foreach (x; xmin..xmax+1)
 				pixelHR(x*HR, itpl(y1*HR, y2*HR, x, x1, x2), c);
 		else
-			foreach (y; min(y1,y2)..max(y1,y2)+1)
+			foreach (y; ymin..ymax+1)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1, y2), y*HR, c);
+	}
+
+	void fineLine(uint x1, uint y1, uint x2, uint y2, COLOR c, uint step=1)
+	{
+		auto xmin = min(x1, x2);
+		auto xmax = max(x1, x2);
+		auto ymin = min(y1, y2);
+		auto ymax = max(y1, y2);
+
+		if (xmax-xmin > ymax-ymin)
+		{
+			uint end = xmax*HR;
+			for (uint x=xmin*HR; x<=end; x+=step)
+				pixelHR(x, itpl(y1*HR, y2*HR, x, x1*HR, x2*HR), c);
+		}
+		else
+		{
+			uint end = ymax*HR;
+			for (uint y=ymin*HR; y<=end; y+=step)
+				pixelHR(itpl(x1*HR, x2*HR, y, y1*HR, y2*HR), y, c);
+		}
 	}
 }
 
