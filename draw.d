@@ -32,7 +32,7 @@ struct Image(COLOR)
 		pixels.length = w*h;
 	}
 
-	COLOR opIndex(uint x, uint y)
+	ref COLOR opIndex(uint x, uint y)
 	{
 		return pixels[y*w+x];
 	}
@@ -75,21 +75,26 @@ struct Image(COLOR)
 			pixels[y*w+x1+1..y*w+x2] = b;
 	}
 
-	static string[] readPNMHeader(ref ubyte[] data)
+	// Unchecked! Make sure area is bounded.
+	void uncheckedFloodFill(uint x, uint y, COLOR c)
 	{
-		string[] fields;
-		uint wordStart = 0;
-		uint p;
-		for (p=1; p<data.length && fields.length<4; p++)
-			if (!iswhite(data[p-1]) && iswhite(data[p]))
-				fields ~= cast(string)data[wordStart..p];
-			else
-			if (iswhite(data[p-1]) && !iswhite(data[p]))
-				wordStart = p;
-		data = data[p..$];
-		enforce(fields.length==4, "Header too short");
-		enforce(fields[0].length==2 && fields[0][0]=='P', "Invalid signature");
-		return fields;
+		floodFillPtr(&this[x, y], c, this[x, y]);
+	}
+
+	private void floodFillPtr(COLOR* pp, COLOR c, COLOR f)
+	{
+		COLOR* p0 = pp; while (*p0==f) p0--; p0++;
+		COLOR* p1 = pp; while (*p1==f) p1++; p1--;
+		for (auto p=p0; p<=p1; p++)
+			*p = c;
+		p0 -= w; p1 -= w;
+		for (auto p=p0; p<=p1; p++)
+			if (*p == f)
+				floodFillPtr(p, c, f);
+		p0 += w*2; p1 += w*2;
+		for (auto p=p0; p<=p1; p++)
+			if (*p == f)
+				floodFillPtr(p, c, f);
 	}
 
 	template SameSize(T, U...)
@@ -112,6 +117,23 @@ struct Image(COLOR)
 		}
 		else
 			static assert(0, "Can't get channel type of " ~ T.stringof);
+	}
+
+	static string[] readPNMHeader(ref ubyte[] data)
+	{
+		string[] fields;
+		uint wordStart = 0;
+		uint p;
+		for (p=1; p<data.length && fields.length<4; p++)
+			if (!iswhite(data[p-1]) && iswhite(data[p]))
+				fields ~= cast(string)data[wordStart..p];
+			else
+			if (iswhite(data[p-1]) && !iswhite(data[p]))
+				wordStart = p;
+		data = data[p..$];
+		enforce(fields.length==4, "Header too short");
+		enforce(fields[0].length==2 && fields[0][0]=='P', "Invalid signature");
+		return fields;
 	}
 
 	void savePNM()(string filename) // RGB only
@@ -241,10 +263,15 @@ struct Image(COLOR)
 		chunks ~= PNGChunk("IHDR", cast(void[])[header]);
 		uint idatStride = w*COLOR.sizeof+1;
 		ubyte[] idatData = new ubyte[h*idatStride];
-		for (int y=0; y<h; y++)
+		for (uint y=0; y<h; y++)
 		{
 			idatData[y*idatStride] = PNGFilterAdaptive.NONE;
-			idatData[y*idatStride+1..(y+1)*idatStride] = cast(ubyte[])pixels[y*w..(y+1)*w];
+			auto rowPixels = cast(COLOR[])idatData[y*idatStride+1..(y+1)*idatStride];
+			rowPixels[] = pixels[y*w..(y+1)*w];
+
+			static if (CHANNEL_TYPE.sizeof > 1)
+				foreach (ref p; cast(CHANNEL_TYPE[])rowPixels)
+					p = bswap(p);
 		}
 		chunks ~= PNGChunk("IDAT", compress(idatData, 5));
 		chunks ~= PNGChunk("IEND", null);
