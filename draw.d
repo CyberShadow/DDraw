@@ -6,6 +6,7 @@ import std.algorithm;
 import std.exception;
 import std.conv;
 import std.math;
+import std.traits;
 static import core.bitop;
 
 struct Image(COLOR)
@@ -187,6 +188,8 @@ struct Image(COLOR)
 
 struct RGB  { ubyte r, g, b, x; }
 struct RGBA { ubyte r, g, b, a; }
+struct GA   { ubyte g, a; }
+struct GA16 { ushort g, a; }
 
 // *****************************************************************************
 
@@ -213,16 +216,49 @@ struct HRImage(COLOR, uint HR)
 			foreach (x; 0..lr.w)
 			{
 				static assert(HR*HR <= 256);
-				// TODO: proper alpha support
-				ExpandType!(COLOR, 1) sum;
-				auto start = y*HR*hr.w + x*HR;
-				foreach (j; 0..HR)
+				static if (is(typeof(COLOR.init.a))) // downscale with alpha
 				{
-					foreach (p; hr.pixels[start..start+HR])
-						sum += p;
-					start += hr.w;
+					ExpandType!(COLOR, 1+COLOR.init.a.sizeof) sum;
+					ExpandType!(typeof(COLOR.init.a), 1) alphaSum;
+					auto start = y*HR*hr.w + x*HR;
+					foreach (j; 0..HR)
+					{
+						foreach (p; hr.pixels[start..start+HR])
+						{
+							foreach (i, f; p.tupleof)
+								static if (p.tupleof[i].stringof != "p.a")
+								{
+									enum FIELD = p.tupleof[i].stringof[2..$];
+									mixin("sum."~FIELD~" += cast(typeof(sum."~FIELD~"))p."~FIELD~" * p.a;");
+								}
+							alphaSum += p.a;
+						}
+						start += hr.w;
+					}
+					if (alphaSum)
+					{
+						auto result = cast(COLOR)(sum / alphaSum);
+						result.a = cast(typeof(result.a))(alphaSum / (HR*HR));
+						lr[x, y] = result;
+					}
+					else
+					{
+						static assert(COLOR.init.a == 0);
+						lr[x, y] = COLOR.init;
+					}
 				}
-				lr[x, y] = cast(COLOR)(sum / (HR*HR));
+				else
+				{
+					ExpandType!(COLOR, 1) sum;
+					auto start = y*HR*hr.w + x*HR;
+					foreach (j; 0..HR)
+					{
+						foreach (p; hr.pixels[start..start+HR])
+							sum += p;
+						start += hr.w;
+					}
+					lr[x, y] = cast(COLOR)(sum / (HR*HR));
+				}
 			}
 	}
 
@@ -238,7 +274,12 @@ struct HRImage(COLOR, uint HR)
 
 	void line(uint x1, uint y1, uint x2, uint y2, COLOR c)
 	{
-		if (abs(x2-x1) > abs(y2-y1))
+		auto xmin = min(x1, x2);
+		auto xmax = max(x1, x2);
+		auto ymin = min(y1, y2);
+		auto ymax = max(y1, y2);
+
+		if (xmax-xmin > ymax-ymin)
 			foreach (x; min(x1,x2)..max(x1,x2)+1)
 				pixelHR(x*HR, itpl(y1*HR, y2*HR, x, x1, x2), c);
 		else
@@ -281,7 +322,7 @@ template ExpandType(T, uint BYTES)
 				}
 
 				foreach (field; fields)
-					s ~= "ExpandType!(typeof(" ~ T.stringof ~ ".init." ~ field ~ ")) " ~ field ~ ";\n";
+					s ~= "ExpandType!(typeof(" ~ T.stringof ~ ".init." ~ field ~ "), "~BYTES.stringof~") " ~ field ~ ";\n";
 				s ~= "\n";
 
 				s ~= "void opOpAssign(string OP)(" ~ T.stringof ~ " color) if (OP==`+`)\n";
@@ -290,7 +331,7 @@ template ExpandType(T, uint BYTES)
 					s ~= "	"~field~" += color."~field~";\n";
 				s ~= "}\n\n";
 
-				s ~= T.stringof ~ " opBinary(string OP)(uint divisor) if (OP==`/`)\n";
+				s ~= T.stringof ~ " opBinary(string OP, T)(T divisor) if (OP==`/`)\n";
 				s ~= "{\n";
 				s ~= "	"~T.stringof~" color;\n";
 				foreach (field; fields)
@@ -312,7 +353,7 @@ template ExpandType(T, uint BYTES)
 
 T itpl(T, U)(T low, T high, U r, U rLow, U rHigh)
 {
-	return cast(T)(low + (high-low) * (r - rLow) / (rHigh - rLow));
+	return cast(T)(low + (cast(Signed!T)high-cast(Signed!T)low) * (cast(Signed!U)r - cast(Signed!U)rLow) / (cast(Signed!U)rHigh - cast(Signed!U)rLow));
 }
 
 // *****************************************************************************
