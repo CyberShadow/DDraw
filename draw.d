@@ -92,19 +92,19 @@ struct Image(COLOR)
 
 	void savePNM()(string filename) // RGB only
 	{
-		static assert(is(typeof(COLOR.init.r)) && is(typeof(COLOR.init.g)) && is(typeof(COLOR.init.b)) && !is(typeof(COLOR.init.a)), "PNM only supports RGB");
+		static assert(is(typeof(COLOR.init.r)) && is(typeof(COLOR.init.g)) && is(typeof(COLOR.init.b)) && !is(typeof(COLOR.init.a)) && !is(typeof(COLOR.init.x)), "PNM only supports RGB");
 		static assert(COLOR.init.r.sizeof == COLOR.init.g.sizeof && COLOR.init.g.sizeof == COLOR.init.b.sizeof, "Inconsistent color channel sizes");
 		alias typeof(COLOR.init.r) CHANNEL_TYPE;
 		enforce(w*h == pixels.length, "Dimension mismatch");
 		ubyte[] header = cast(ubyte[])format("P6\n%d %d %d\n", w, h, CHANNEL_TYPE.max);
-		ubyte[] data = new ubyte[header.length + pixels.length * 3 * CHANNEL_TYPE.sizeof];
+		ubyte[] data = new ubyte[header.length + pixels.length * COLOR.sizeof];
 		data[0..header.length] = header;
-		CHANNEL_TYPE* p = cast(CHANNEL_TYPE*)(data.ptr + header.length);
-		foreach (c; pixels)
+		data[header.length..$] = cast(ubyte[])pixels;
+		static if (CHANNEL_TYPE.sizeof > 1)
 		{
-			*p++ = bswap(c.r);
-			*p++ = bswap(c.g);
-			*p++ = bswap(c.b);
+			auto end = cast(CHANNEL_TYPE*)data.ptr+data.length;
+			for (CHANNEL_TYPE* p = cast(CHANNEL_TYPE*)(data.ptr + header.length); p<end; p++)
+				*p = bswap(*p);
 		}
 		std.file.write(filename, data);
 	}
@@ -186,10 +186,18 @@ struct Image(COLOR)
 	}
 }
 
-struct RGB  { ubyte r, g, b, x; }
+struct RGB  { ubyte r, g, b; }
+struct RGBX { ubyte r, g, b, x; }
 struct RGBA { ubyte r, g, b, a; }
 struct GA   { ubyte g, a; }
 struct GA16 { ushort g, a; }
+
+private
+{
+	static assert(RGB.sizeof == 3);
+	RGB[2] test;
+	static assert(test.sizeof == 6);
+}
 
 // *****************************************************************************
 
