@@ -7,6 +7,7 @@ import std.exception;
 import std.conv;
 import std.math;
 import std.traits;
+import std.zlib;
 import crc32;
 static import core.bitop;
 
@@ -166,6 +167,107 @@ struct Image(COLOR)
 		enforce(pixels.length == w*h, "Dimension / filesize mismatch");
 		this.w = w;
 		this.h = h;
+	}
+
+	void savePNG()(string filename)
+	{
+		enum : ulong { SIGNATURE = 0x0a1a0a0d474e5089 }
+
+		struct PNGChunk
+		{
+			char[4] type;
+			const(void)[] data;
+
+			uint crc32()
+			{
+				uint crc = strcrc32(type);
+				foreach (v; cast(ubyte[])data)
+					crc = update_crc32(v, crc);
+				return ~crc;
+			}
+
+			this(string type, const(void)[] data)
+			{
+				this.type[] = type;
+				this.data = data;
+			}
+		}
+
+		enum PNGColourType : ubyte { G, RGB=2, PLTE, GA, RGBA=6 }
+		enum PNGCompressionMethod : ubyte { DEFLATE }
+		enum PNGFilterMethod : ubyte { ADAPTIVE }
+		enum PNGInterlaceMethod : ubyte { NONE, ADAM7 }
+
+		enum PNGFilterAdaptive : ubyte { NONE, SUB, UP, AVERAGE, PAETH }
+
+		struct PNGHeader
+		{
+		align(1):
+			uint width, height;
+			ubyte colourDepth;
+			PNGColourType colourType;
+			PNGCompressionMethod compressionMethod;
+			PNGFilterMethod filterMethod;
+			PNGInterlaceMethod interlaceMethod;
+			static assert(PNGHeader.sizeof == 13);
+		}
+
+		alias ChannelType!COLOR CHANNEL_TYPE;
+
+		static if (!is(COLOR == struct))
+			enum COLOUR_TYPE = PNGColourType.G;
+		else
+		static if (__traits(allMembers, COLOR).stringof == `tuple("r","g","b")`)
+			enum COLOUR_TYPE = PNGColourType.RGB;
+		else
+		static if (__traits(allMembers, COLOR).stringof == `tuple("g","a")`)
+			enum COLOUR_TYPE = PNGColourType.GA;
+		else
+		static if (__traits(allMembers, COLOR).stringof == `tuple("r","g","b","a")`)
+			enum COLOUR_TYPE = PNGColourType.RGBA;
+		else
+			static assert(0, "Unsupported PNG color type");
+
+		PNGChunk[] chunks;
+		PNGHeader header = {
+			width : bswap(w),
+			height : bswap(h),
+			colourDepth : CHANNEL_TYPE.sizeof * 8,
+			colourType : COLOUR_TYPE,
+			compressionMethod : PNGCompressionMethod.DEFLATE,
+			filterMethod : PNGFilterMethod.ADAPTIVE,
+			interlaceMethod : PNGInterlaceMethod.NONE,
+		};
+		chunks ~= PNGChunk("IHDR", cast(void[])[header]);
+		uint idatStride = w*COLOR.sizeof+1;
+		ubyte[] idatData = new ubyte[h*idatStride];
+		for (int y=0; y<h; y++)
+		{
+			idatData[y*idatStride] = PNGFilterAdaptive.NONE;
+			idatData[y*idatStride+1..(y+1)*idatStride] = cast(ubyte[])pixels[y*w..(y+1)*w];
+		}
+		chunks ~= PNGChunk("IDAT", compress(idatData, 5));
+		chunks ~= PNGChunk("IEND", null);
+
+		uint totalSize = 8;
+		foreach (chunk; chunks)
+			totalSize += 8 + chunk.data.length + 4;
+		ubyte[] data = new ubyte[totalSize];
+
+		*cast(ulong*)data.ptr = SIGNATURE;
+		uint pos = 8;
+		foreach(chunk;chunks)
+		{
+			uint i = pos;
+			uint chunkLength = chunk.data.length;
+			pos += 12 + chunkLength;
+			*cast(uint*)&data[i] = bswap(chunkLength);
+			(cast(char[])data[i+4 .. i+8])[] = chunk.type;
+			data[i+8 .. i+8+chunk.data.length] = cast(ubyte[])chunk.data;
+			*cast(uint*)&data[i+8+chunk.data.length] = bswap(chunk.crc32());
+			assert(pos == i+12+chunk.data.length);
+		}
+		std.file.write(filename, data);
 	}
 
 	static T bswap(T)(T b)
