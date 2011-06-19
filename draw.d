@@ -239,16 +239,16 @@ struct Image(COLOR)
 		static if (!is(COLOR == struct))
 			enum COLOUR_TYPE = PNGColourType.G;
 		else
-		static if (__traits(allMembers, COLOR).stringof == `tuple("r","g","b")`)
+		static if (structFields!COLOR()==["r","g","b"])
 			enum COLOUR_TYPE = PNGColourType.RGB;
 		else
-		static if (__traits(allMembers, COLOR).stringof == `tuple("g","a")`)
+		static if (structFields!COLOR()==["g","a"])
 			enum COLOUR_TYPE = PNGColourType.GA;
 		else
-		static if (__traits(allMembers, COLOR).stringof == `tuple("r","g","b","a")`)
+		static if (structFields!COLOR()==["r","g","b","a"])
 			enum COLOUR_TYPE = PNGColourType.RGBA;
 		else
-			static assert(0, "Unsupported PNG color type");
+			static assert(0, "Unsupported PNG color type: " ~ COLOR.stringof);
 
 		PNGChunk[] chunks;
 		PNGHeader header = {
@@ -493,16 +493,7 @@ template ExpandType(T, uint BYTES)
 			static string mixFields()
 			{
 				string s;
-				string[] fields;
-				foreach (i, f; T.init.tupleof)
-				{
-					string field = T.tupleof[i].stringof;
-					while (field[0] != '.')
-						field = field[1..$];
-					field = field[1..$];
-					if (field != "x") // HACK
-						fields ~= field;
-				}
+				string[] fields = structFields!T;
 
 				foreach (field; fields)
 					s ~= "ExpandType!(typeof(" ~ T.stringof ~ ".init." ~ field ~ "), "~BYTES.stringof~") " ~ field ~ ";\n";
@@ -532,11 +523,49 @@ template ExpandType(T, uint BYTES)
 		static assert(0);
 }
 
+template ReplaceType(T, FROM, TO)
+{
+	static if (is(T == FROM))
+		alias TO ReplaceType;
+	else
+	static if (is(T==struct))
+		struct ReplaceType
+		{
+			static string mixFields()
+			{
+				string s;
+				foreach (field; structFields!T)
+					s ~= "ReplaceType!(typeof(" ~ T.stringof ~ ".init." ~ field ~ "), FROM, TO) " ~ field ~ ";\n";
+				return s;
+			}
+
+			//pragma(msg, mixFields());
+			mixin(mixFields());
+		}
+	else
+		static assert(0, "Can't replace " ~ T.stringof);
+}
+
 // *****************************************************************************
 
 T itpl(T, U)(T low, T high, U r, U rLow, U rHigh)
 {
 	return cast(T)(low + (cast(Signed!T)high-cast(Signed!T)low) * (cast(Signed!U)r - cast(Signed!U)rLow) / (cast(Signed!U)rHigh - cast(Signed!U)rLow));
+}
+
+private string[] structFields(T)()
+{
+	string[] fields;
+	foreach (i, f; T.init.tupleof)
+	{
+		string field = T.tupleof[i].stringof;
+		while (field[0] != '.')
+			field = field[1..$];
+		field = field[1..$];
+		if (field != "x") // HACK
+			fields ~= field;
+	}
+	return fields;
 }
 
 // *****************************************************************************
@@ -554,11 +583,25 @@ struct GammaRamp(LUM_COLOR, PIX_COLOR)
 			lum2pix[lum] = cast(PIX_COLOR)(pow(lum/cast(double)LUM_COLOR.max, 1/gamma)*PIX_COLOR.max);
 	}
 
-	Image!PIX_COLOR image2pix(in Image!LUM_COLOR lumImage)
+	static string mixConvert(T)(string srcVar, string destVar, string convArray)
 	{
-		auto pixImage = Image!PIX_COLOR(lumImage.w, lumImage.h);
+		static if (is(T==struct))
+		{
+			string s;
+			foreach (field; structFields!T)
+				s ~= destVar~"."~field~" = "~convArray~"["~srcVar~"."~field~"];";
+			return s;
+		}
+		else
+			return destVar~" = "~convArray~"["~srcVar~"];";
+	}
+
+	auto image2pix(COLOR)(in Image!COLOR lumImage)
+	{
+		alias ReplaceType!(COLOR, LUM_COLOR, PIX_COLOR) COLOR2;
+		auto pixImage = Image!COLOR2(lumImage.w, lumImage.h);
 		foreach (i, p; lumImage.pixels)
-			pixImage.pixels[i] = lum2pix[p];
+			mixin(mixConvert!COLOR(`p`, `pixImage.pixels[i]`, `lum2pix`));
 		return pixImage;
 	}
 }
