@@ -549,27 +549,6 @@ struct HRImage(COLOR, int HR)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1, y2), y*HR, c);
 	}
 
-	void fineLine_(int x1, int y1, int x2, int y2, COLOR c, int step=1)
-	{
-		auto xmin = min(x1, x2);
-		auto xmax = max(x1, x2);
-		auto ymin = min(y1, y2);
-		auto ymax = max(y1, y2);
-
-		if (xmax-xmin > ymax-ymin)
-		{
-			int end = xmax*HR;
-			for (int x=xmin*HR; x<=end; x+=step)
-				pixelHR(x, itpl(y1*HR, y2*HR, x, x1*HR, x2*HR), c);
-		}
-		else
-		{
-			int end = ymax*HR;
-			for (int y=ymin*HR; y<=end; y+=step)
-				pixelHR(itpl(x1*HR, x2*HR, y, y1*HR, y2*HR), y, c);
-		}
-	}
-
 	void fineLine(int x1, int y1, int x2, int y2, COLOR c)
 	{
 		hr.thickLine(x1*HR+HR/2, y1*HR+HR/2, x2*HR+HR/2, y2*HR+HR/2, HR/2, c);
