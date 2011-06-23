@@ -11,21 +11,21 @@ import std.zlib;
 import crc32;
 static import core.bitop;
 
-struct Coord { uint x, y; string toString() { return format([this.tupleof]); } }
+struct Coord { int x, y; string toString() { return format([this.tupleof]); } }
 
 struct Image(COLOR)
 {
 	alias COLOR ColorType;
 
-	uint w, h;
+	int w, h;
 	COLOR[] pixels;
 
-	this(uint w, uint h)
+	this(int w, int h)
 	{
 		size(w, h);
 	}
 
-	void size(uint w, uint h)
+	void size(int w, int h)
 	{
 		if ((this.w && this.h) && (w && h))
 			throw new Exception("Resize not implemented");
@@ -34,13 +34,15 @@ struct Image(COLOR)
 		pixels.length = w*h;
 	}
 
-	ref COLOR opIndex(uint x, uint y)
+	ref COLOR opIndex(int x, int y)
 	{
+		assert(x>=0 && y>=0 && x<w && y<h);
 		return pixels[y*w+x];
 	}
 
-	void opIndexAssign(COLOR value, uint x, uint y)
+	void opIndexAssign(COLOR value, int x, int y)
 	{
+		assert(x>=0 && y>=0 && x<w && y<h);
 		pixels[y*w+x] = value;
 	}
 
@@ -49,25 +51,25 @@ struct Image(COLOR)
 		pixels[] = c;
 	}
 
-	void hline(bool CHECKED=false)(uint x1, uint x2, uint y, COLOR c)
+	void hline(bool CHECKED=false)(int x1, int x2, int y, COLOR c)
 	{
 		static if (CHECKED)
 		{
-			if (x1 >= w || cast(int)x2 < 0 || cast(int)y < 0 || y>=h) return;
-			if (cast(int)x1 < 0) x1=0;
+			if (x1 >= w || x2 < 0 || y < 0 || y>=h) return;
+			if (x1 <  0) x1=0;
 			if (x2 >= w) x2=w;
 		}
 		auto rowOffset = y*w;
 		pixels[rowOffset+x1..rowOffset+x2] = c;
 	}
 
-	void vline(uint x, uint y1, uint y2, COLOR c)
+	void vline(int x, int y1, int y2, COLOR c)
 	{
 		foreach (y; y1..y2) // TODO: optimize
 			pixels[y*w+x] = c;
 	}
 
-	void rect(uint x1, uint y1, uint x2, uint y2, COLOR c) // []
+	void rect(int x1, int y1, int x2, int y2, COLOR c) // []
 	{
 		hline(x1, x2+1, y1, c);
 		hline(x1, x2+1, y2, c);
@@ -75,13 +77,13 @@ struct Image(COLOR)
 		vline(x2, y1, y2+1, c);
 	}
 
-	void fillRect(uint x1, uint y1, uint x2, uint y2, COLOR b) // [)
+	void fillRect(int x1, int y1, int x2, int y2, COLOR b) // [)
 	{
 		foreach (y; y1..y2)
 			pixels[y*w+x1..y*w+x2] = b;
 	}
 
-	void fillRect(uint x1, uint y1, uint x2, uint y2, COLOR c, COLOR b) // []
+	void fillRect(int x1, int y1, int x2, int y2, COLOR c, COLOR b) // []
 	{
 		rect(x1, y1, x2, y2, c);
 		foreach (y; y1+1..y2)
@@ -89,7 +91,7 @@ struct Image(COLOR)
 	}
 
 	// Unchecked! Make sure area is bounded.
-	void uncheckedFloodFill(uint x, uint y, COLOR c)
+	void uncheckedFloodFill(int x, int y, COLOR c)
 	{
 		floodFillPtr(&this[x, y], c, this[x, y]);
 	}
@@ -110,13 +112,13 @@ struct Image(COLOR)
 				floodFillPtr(p, c, f);
 	}
 
-	void fillCircle(uint x, uint y, uint r, COLOR c)
+	void fillCircle(int x, int y, int r, COLOR c)
 	{
-		uint x1 = x>r?x-r:0;
-		uint y1 = y>r?y-r:0;
-		uint x2 = min(x+r, w);
-		uint y2 = min(y+r, h);
-		uint r2 = sqr(r);
+		int x1 = x>r?x-r:0;
+		int y1 = y>r?y-r:0;
+		int x2 = min(x+r, w);
+		int y2 = min(y+r, h);
+		int r2 = sqr(r);
 		// TODO: optimize
 		foreach (px; x1..x2+1)
 			foreach (py; y1..y2+1)
@@ -126,7 +128,7 @@ struct Image(COLOR)
 
 	void fillPoly(Coord[] coords, COLOR f)
 	{
-		uint minY, maxY;
+		int minY, maxY;
 		minY = maxY = coords[0].y;
 		foreach (c; coords[1..$])
 			minY = min(minY, c.y),
@@ -134,17 +136,17 @@ struct Image(COLOR)
 
 		foreach (y; minY..maxY+1)
 		{
-			uint[] intersections;
+			int[] intersections;
 			foreach (i; 0..coords.length)
 			{
 				auto c0=coords[i], c1=coords[i==$-1?0:i+1];
 				if (y==c0.y)
 				{
 					assert(y == coords[i%$].y);
-					uint pi = i-1, py;
+					uint pi = i-1; int py;
 					while ((py=coords[(pi+$)%$].y)==y)
 						pi--;
-					uint ni = i+1, ny;
+					uint ni = i+1; int ny;
 					while ((ny=coords[ni%$].y)==y)
 						ni++;
 					if ((py>y) == (y>ny))
@@ -165,15 +167,15 @@ struct Image(COLOR)
 		}
 	}
 
-	void thickLine(uint x1, uint y1, uint x2, uint y2, uint r, COLOR c)
+	void thickLine(int x1, int y1, int x2, int y2, int r, COLOR c)
 	{
-		int dx = cast(int)x2-cast(int)x1;
-		int dy = cast(int)y2-cast(int)y1;
+		int dx = x2-x1;
+		int dy = y2-y1;
 		int d  = cast(int)sqrt(sqr(dx)+sqr(dy));
 		if (d==0) return;
 
-		int nx = dx*cast(int)r/d;
-		int ny = dy*cast(int)r/d;
+		int nx = dx*r/d;
+		int ny = dy*r/d;
 
 		fillPoly([
 			Coord(x1-ny, y1+nx),
@@ -183,7 +185,7 @@ struct Image(COLOR)
 		], c);
 	}
 
-	void thickLinePoly(Coord[] coords, uint r, COLOR c)
+	void thickLinePoly(Coord[] coords, int r, COLOR c)
 	{
 		foreach (i; 0..coords.length)
 			thickLine(coords[i].tupleof, coords[(i+1)%$].tupleof, r, c);
@@ -403,12 +405,12 @@ struct Image(COLOR)
 			static assert(false, "Don't know how to bswap " ~ T.stringof);
 	}
 
-	Image!COLOR crop(uint x1, uint y1, uint x2, uint y2)
+	Image!COLOR crop(int x1, int y1, int x2, int y2)
 	{
 		auto nw = x2-x1;
 		auto nh = y2-y1;
 		auto newImage = Image!COLOR(nw, nh);
-		uint oldOffset, newOffset;
+		int oldOffset, newOffset;
 		foreach (y; y1..y2)
 		{
 			auto oldOffset2 = oldOffset + w;
@@ -447,11 +449,11 @@ private
 
 // *****************************************************************************
 
-struct HRImage(COLOR, uint HR)
+struct HRImage(COLOR, int HR)
 {
 	Image!COLOR hr, lr;
 
-	this(uint w, uint h)
+	this(int w, int h)
 	{
 		lr.size(w, h);
 		hr.size(w*HR, h*HR);
@@ -469,11 +471,17 @@ struct HRImage(COLOR, uint HR)
 		foreach (y; 0..lr.h)
 			foreach (x; 0..lr.w)
 			{
-				static assert(HR*HR <= 256);
+				static if (HR*HR <= 0x100)
+					enum EXPAND_BYTES = 1;
+				else
+				static if (HR*HR <= 0x10000)
+					enum EXPAND_BYTES = 2;
+				else
+					static assert(0);
 				static if (is(typeof(COLOR.init.a))) // downscale with alpha
 				{
-					ExpandType!(COLOR, 1+COLOR.init.a.sizeof) sum;
-					ExpandType!(typeof(COLOR.init.a), 1) alphaSum;
+					ExpandType!(COLOR, EXPAND_BYTES+COLOR.init.a.sizeof) sum;
+					ExpandType!(typeof(COLOR.init.a), EXPAND_BYTES) alphaSum;
 					auto start = y*HR*hr.w + x*HR;
 					foreach (j; 0..HR)
 					{
@@ -503,7 +511,7 @@ struct HRImage(COLOR, uint HR)
 				}
 				else
 				{
-					ExpandType!(COLOR, 1) sum;
+					ExpandType!(COLOR, EXPAND_BYTES) sum;
 					auto start = y*HR*hr.w + x*HR;
 					foreach (j; 0..HR)
 					{
@@ -516,17 +524,17 @@ struct HRImage(COLOR, uint HR)
 			}
 	}
 
-	void pixel(uint x, uint y, COLOR c)
+	void pixel(int x, int y, COLOR c)
 	{
 		pixelHR(x*HR, y*HR, c);
 	}
 	
-	void pixelHR(uint x, uint y, COLOR c)
+	void pixelHR(int x, int y, COLOR c)
 	{
 		hr.fillRect(x, y, x+HR, y+HR, c);
 	}
 
-	void line(uint x1, uint y1, uint x2, uint y2, COLOR c)
+	void line(int x1, int y1, int x2, int y2, COLOR c)
 	{
 		auto xmin = min(x1, x2);
 		auto xmax = max(x1, x2);
@@ -541,7 +549,7 @@ struct HRImage(COLOR, uint HR)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1, y2), y*HR, c);
 	}
 
-	void fineLine_(uint x1, uint y1, uint x2, uint y2, COLOR c, uint step=1)
+	void fineLine_(int x1, int y1, int x2, int y2, COLOR c, int step=1)
 	{
 		auto xmin = min(x1, x2);
 		auto xmax = max(x1, x2);
@@ -550,21 +558,21 @@ struct HRImage(COLOR, uint HR)
 
 		if (xmax-xmin > ymax-ymin)
 		{
-			uint end = xmax*HR;
-			for (uint x=xmin*HR; x<=end; x+=step)
+			int end = xmax*HR;
+			for (int x=xmin*HR; x<=end; x+=step)
 				pixelHR(x, itpl(y1*HR, y2*HR, x, x1*HR, x2*HR), c);
 		}
 		else
 		{
-			uint end = ymax*HR;
-			for (uint y=ymin*HR; y<=end; y+=step)
+			int end = ymax*HR;
+			for (int y=ymin*HR; y<=end; y+=step)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1*HR, y2*HR), y, c);
 		}
 	}
 
-	void fineLine(uint x1, uint y1, uint x2, uint y2, COLOR c)
+	void fineLine(int x1, int y1, int x2, int y2, COLOR c)
 	{
-		hr.thickLine(x1*HR, y1*HR, x2*HR, y2*HR, HR, c);
+		hr.thickLine(x1*HR+HR/2, y1*HR+HR/2, x2*HR+HR/2, y2*HR+HR/2, HR/2, c);
 	}
 }
 
