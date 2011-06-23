@@ -11,6 +11,8 @@ import std.zlib;
 import crc32;
 static import core.bitop;
 
+struct Coord { uint x, y; string toString() { return format([this.tupleof]); } }
+
 struct Image(COLOR)
 {
 	alias COLOR ColorType;
@@ -42,8 +44,19 @@ struct Image(COLOR)
 		pixels[y*w+x] = value;
 	}
 
-	void hline(uint x1, uint x2, uint y, COLOR c)
+	void clear(COLOR c)
 	{
+		pixels[] = c;
+	}
+
+	void hline(bool CHECKED=false)(uint x1, uint x2, uint y, COLOR c)
+	{
+		static if (CHECKED)
+		{
+			if (x1 >= w || cast(int)x2 < 0 || cast(int)y < 0 || y>=h) return;
+			if (cast(int)x1 < 0) x1=0;
+			if (x2 >= w) x2=w;
+		}
 		auto rowOffset = y*w;
 		pixels[rowOffset+x1..rowOffset+x2] = c;
 	}
@@ -95,6 +108,85 @@ struct Image(COLOR)
 		for (auto p=p0; p<=p1; p++)
 			if (*p == f)
 				floodFillPtr(p, c, f);
+	}
+
+	void fillCircle(uint x, uint y, uint r, COLOR c)
+	{
+		uint x1 = x>r?x-r:0;
+		uint y1 = y>r?y-r:0;
+		uint x2 = min(x+r, w);
+		uint y2 = min(y+r, h);
+		uint r2 = sqr(r);
+		// TODO: optimize
+		foreach (px; x1..x2+1)
+			foreach (py; y1..y2+1)
+				if (sqr(x>px?x-px:px-x) + sqr(y>py?y-py:py-y) < r2)
+					this[px, py] = c;
+	}
+
+	void fillPoly(Coord[] coords, COLOR f)
+	{
+		uint minY, maxY;
+		minY = maxY = coords[0].y;
+		foreach (c; coords[1..$])
+			minY = min(minY, c.y),
+			maxY = max(maxY, c.y);
+
+		foreach (y; minY..maxY+1)
+		{
+			uint[] intersections;
+			foreach (i; 0..coords.length)
+			{
+				auto c0=coords[i], c1=coords[i==$-1?0:i+1];
+				if (y==c0.y)
+				{
+					assert(y == coords[i%$].y);
+					uint pi = i-1, py;
+					while ((py=coords[(pi+$)%$].y)==y)
+						pi--;
+					uint ni = i+1, ny;
+					while ((ny=coords[ni%$].y)==y)
+						ni++;
+					if ((py>y) == (y>ny))
+						intersections ~= coords[i%$].x;
+				}
+				else
+				if (c0.y<y && y<c1.y)
+					intersections ~= itpl(c0.x, c1.x, y, c0.y, c1.y);
+				else
+				if (c1.y<y && y<c0.y)
+					intersections ~= itpl(c1.x, c0.x, y, c1.y, c0.y);
+			}
+
+			assert(intersections.length % 2==0);
+			intersections.sort;
+			for (uint i=0; i<intersections.length; i+=2)
+				hline!true(intersections[i], intersections[i+1], y, f);
+		}
+	}
+
+	void thickLine(uint x1, uint y1, uint x2, uint y2, uint r, COLOR c)
+	{
+		int dx = cast(int)x2-cast(int)x1;
+		int dy = cast(int)y2-cast(int)y1;
+		int d  = cast(int)sqrt(sqr(dx)+sqr(dy));
+		if (d==0) return;
+
+		int nx = dx*cast(int)r/d;
+		int ny = dy*cast(int)r/d;
+
+		fillPoly([
+			Coord(x1-ny, y1+nx),
+			Coord(x1+ny, y1-nx),
+			Coord(x2+ny, y2-nx),
+			Coord(x2-ny, y2+nx),
+		], c);
+	}
+
+	void thickLinePoly(Coord[] coords, uint r, COLOR c)
+	{
+		foreach (i; 0..coords.length)
+			thickLine(coords[i].tupleof, coords[(i+1)%$].tupleof, r, c);
 	}
 
 	template SameSize(T, U...)
@@ -449,7 +541,7 @@ struct HRImage(COLOR, uint HR)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1, y2), y*HR, c);
 	}
 
-	void fineLine(uint x1, uint y1, uint x2, uint y2, COLOR c, uint step=1)
+	void fineLine_(uint x1, uint y1, uint x2, uint y2, COLOR c, uint step=1)
 	{
 		auto xmin = min(x1, x2);
 		auto xmax = max(x1, x2);
@@ -468,6 +560,11 @@ struct HRImage(COLOR, uint HR)
 			for (uint y=ymin*HR; y<=end; y+=step)
 				pixelHR(itpl(x1*HR, x2*HR, y, y1*HR, y2*HR), y, c);
 		}
+	}
+
+	void fineLine(uint x1, uint y1, uint x2, uint y2, COLOR c)
+	{
+		hr.thickLine(x1*HR, y1*HR, x2*HR, y2*HR, HR, c);
 	}
 }
 
@@ -552,6 +649,8 @@ T itpl(T, U)(T low, T high, U r, U rLow, U rHigh)
 {
 	return cast(T)(low + (cast(Signed!T)high-cast(Signed!T)low) * (cast(Signed!U)r - cast(Signed!U)rLow) / (cast(Signed!U)rHigh - cast(Signed!U)rLow));
 }
+
+T sqr(T)(T x) { return x*x; }
 
 private string[] structFields(T)()
 {
