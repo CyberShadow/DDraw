@@ -51,6 +51,44 @@ struct Image(COLOR)
 		pixels[] = c;
 	}
 
+	void draw(Image!COLOR image, int x, int y)
+	{
+		// TODO: alpha blending
+		size_t start = y*w+x, imageStart = 0;
+		foreach (j; 0..image.h)
+			pixels[start..start+image.w] = image.pixels[imageStart..imageStart+image.w],
+			start += w,
+			imageStart += image.w;
+	}
+
+	static Image!COLOR hjoin(Image!COLOR[] images)
+	{
+		int w, h;
+		foreach (ref image; images)
+			w += image.w,
+			h = max(h, image.h);
+		auto result = Image!COLOR(w, h);
+		int x;
+		foreach (ref image; images)
+			result.draw(image, x, 0),
+			x += image.w;
+		return result;
+	}
+
+	static Image!COLOR vjoin(Image!COLOR[] images)
+	{
+		int w, h;
+		foreach (ref image; images)
+			w = max(w, image.w),
+			h += image.h;
+		auto result = Image!COLOR(w, h);
+		int y;
+		foreach (ref image; images)
+			result.draw(image, 0, y),
+			y += image.h;
+		return result;
+	}
+
 	void hline(bool CHECKED=false)(int x1, int x2, int y, COLOR c)
 	{
 		static if (CHECKED)
