@@ -448,7 +448,8 @@ struct Image(COLOR)
 		auto nw = x2-x1;
 		auto nh = y2-y1;
 		auto newImage = Image!COLOR(nw, nh);
-		int oldOffset, newOffset;
+		auto oldOffset = y1*w + x1;
+		auto newOffset = 0;
 		foreach (y; y1..y2)
 		{
 			auto oldOffset2 = oldOffset + w;
