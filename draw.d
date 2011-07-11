@@ -696,12 +696,12 @@ private string[] structFields(T)()
 
 // *****************************************************************************
 
+enum ColorSpace { sRGB }
+
 struct GammaRamp(LUM_COLOR, PIX_COLOR)
 {
 	LUM_COLOR[PIX_COLOR.max+1] pix2lum;
 	PIX_COLOR[LUM_COLOR.max+1] lum2pix;
-
-	enum ColorSpace { sRGB }
 
 	this(double gamma)
 	{
