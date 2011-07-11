@@ -700,12 +700,45 @@ struct GammaRamp(LUM_COLOR, PIX_COLOR)
 	LUM_COLOR[PIX_COLOR.max+1] pix2lum;
 	PIX_COLOR[LUM_COLOR.max+1] lum2pix;
 
+	enum ColorSpace { sRGB }
+
 	this(double gamma)
 	{
 		foreach (pix; 0..PIX_COLOR.max+1)
 			pix2lum[pix] = cast(LUM_COLOR)(pow(pix/cast(double)PIX_COLOR.max,   gamma)*LUM_COLOR.max);
 		foreach (lum; 0..LUM_COLOR.max+1)
 			lum2pix[lum] = cast(PIX_COLOR)(pow(lum/cast(double)LUM_COLOR.max, 1/gamma)*PIX_COLOR.max);
+	}
+
+	this(ColorSpace colorSpace)
+	{
+		final switch(colorSpace)
+		{
+			case ColorSpace.sRGB:
+			{
+				static double sRGB_to_linear(double cf)
+				{
+					if (cf <= 0.0392857)
+						return cf / 12.9232102;
+					else
+						return pow((cf + 0.055)/1.055, 2.4L);
+				}
+
+				static double linear_to_sRGB(double cf)
+				{
+					if (cf <= 0.00303993)
+						return cf * 12.9232102;
+					else
+						return 1.055*pow(cf, 1/2.4L) - 0.055;
+				}
+
+				foreach (pix; 0..PIX_COLOR.max+1)
+					pix2lum[pix] = cast(LUM_COLOR)(sRGB_to_linear(pix/cast(double)PIX_COLOR.max)*LUM_COLOR.max);
+				foreach (lum; 0..LUM_COLOR.max+1)
+					lum2pix[lum] = cast(PIX_COLOR)(linear_to_sRGB(lum/cast(double)LUM_COLOR.max)*PIX_COLOR.max);
+				break;
+			}
+		}
 	}
 
 	static string mixConvert(T)(string srcVar, string destVar, string convArray)
