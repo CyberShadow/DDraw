@@ -2,6 +2,7 @@ module draw;
 
 import std.file;
 import std.string;
+import std.ascii;
 import std.algorithm;
 import std.exception;
 import std.conv;
@@ -257,10 +258,10 @@ struct Image(COLOR)
 		uint wordStart = 0;
 		uint p;
 		for (p=1; p<data.length && fields.length<4; p++)
-			if (!iswhite(data[p-1]) && iswhite(data[p]))
+			if (!isWhite(data[p-1]) && isWhite(data[p]))
 				fields ~= cast(string)data[wordStart..p];
 			else
-			if (iswhite(data[p-1]) && !iswhite(data[p]))
+			if (isWhite(data[p-1]) && !isWhite(data[p]))
 				wordStart = p;
 		data = data[p..$];
 		enforce(fields.length==4, "Header too short");
