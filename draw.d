@@ -90,6 +90,15 @@ struct Image(COLOR)
 		return result;
 	}
 
+	Image!COLOR hflip()
+	{
+		auto newImage = Image!COLOR(w, h);
+		foreach (y; 0..h)
+			foreach (x, c; pixels[y*w..y*w+w])
+				newImage[w-x-1, y] = c;
+		return newImage;
+	}
+
 	void hline(bool CHECKED=false)(int x1, int x2, int y, COLOR c)
 	{
 		static if (CHECKED)
