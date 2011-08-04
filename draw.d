@@ -162,16 +162,43 @@ struct Image(COLOR)
 
 	void fillCircle(int x, int y, int r, COLOR c)
 	{
-		int x1 = x>r?x-r:0;
-		int y1 = y>r?y-r:0;
-		int x2 = min(x+r, w);
-		int y2 = min(y+r, h);
-		int r2 = sqr(r);
+		int x0 = x>r?x-r:0;
+		int y0 = y>r?y-r:0;
+		int x1 = min(x+r, w-1);
+		int y1 = min(y+r, h-1);
+		int rs = sqr(r);
 		// TODO: optimize
-		foreach (px; x1..x2+1)
-			foreach (py; y1..y2+1)
-				if (sqr(x>px?x-px:px-x) + sqr(y>py?y-py:py-y) < r2)
+		foreach (py; y0..y1+1)
+			foreach (px; x0..x1+1)
+				if (sqr(x-px) + sqr(y-py) < rs)
 					this[px, py] = c;
+	}
+
+	void fillSector(int x, int y, int r0, int r1, real a0, real a1, COLOR c)
+	{
+		int x0 = x>r1?x-r1:0;
+		int y0 = y>r1?y-r1:0;
+		int x1 = min(x+r1, w-1);
+		int y1 = min(y+r1, h-1);
+		int r0s = sqr(r0);
+		int r1s = sqr(r1);
+		if (a0 > a1)
+			a1 += TAU;
+		foreach (py; y0..y1+1)
+			foreach (px; x0..x1+1)
+			{
+				int dx = px-x;
+				int dy = py-y;
+				int rs = sqr(dx) + sqr(dy);
+				if (r0s <= rs && rs < r1s)
+				{
+					real a = atan2(to!real(dy), to!real(dx));
+					if ((a0 <= a && a <= a1) ||
+					    (a += TAU,
+					    (a0 <= a && a <= a1)))
+						this[px, py] = c;
+				}
+			}
 	}
 
 	void fillPoly(Coord[] coords, COLOR f)
@@ -680,6 +707,8 @@ template ReplaceType(T, FROM, TO)
 }
 
 // *****************************************************************************
+
+enum TAU = 2*PI;
 
 T itpl(T, U)(T low, T high, U r, U rLow, U rHigh)
 {
